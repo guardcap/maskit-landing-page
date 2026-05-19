@@ -116,6 +116,10 @@ npm run dev
 
 ## 아키텍처
 
+## System Architecture
+
+![MASKIT Architecture](./architecture.png)
+
 ### 디렉토리 구조
 
 ```bash
