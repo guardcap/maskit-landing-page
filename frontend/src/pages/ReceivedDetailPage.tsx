@@ -14,6 +14,7 @@ import {
   CheckCircle,
   XCircle,
 } from 'lucide-react'
+import { findMockReceivedEmail, isMockMode } from '@/mock/demoData'
 
 interface EmailDetail {
   _id: string
@@ -53,6 +54,14 @@ export function ReceivedDetailPage({ emailId, onBack }: ReceivedDetailPageProps)
   const loadEmailDetail = async () => {
     try {
       setLoading(true)
+      if (isMockMode()) {
+        const mockEmail = findMockReceivedEmail(emailId)
+        if (!mockEmail) throw new Error('샘플 메일을 찾을 수 없습니다.')
+        setEmail(mockEmail)
+        setError(null)
+        return
+      }
+
       const API_BASE = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
       const { authenticatedFetch } = await import('../utils/auth')
       const data = await authenticatedFetch(`${API_BASE}/api/v1/emails/email/${emailId}`)

@@ -6,6 +6,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from app.policy.models import TokenData, UserRole
 from app.database.mongodb import get_database
+from app.local_store import get_user_settings
 import os
 from dotenv import load_dotenv
 def get_kst_now():
@@ -13,7 +14,7 @@ def get_kst_now():
     return datetime.utcnow() + timedelta(hours=9)
 load_dotenv()
 
-SECRET_KEY = os.getenv("SECRET_KEY")
+SECRET_KEY = os.getenv("SECRET_KEY", "maskit-local-dev-secret-change-me")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
 
@@ -52,6 +53,16 @@ async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] =
     
     try:
         token = credentials.credentials
+        if token == "mock-free-token":
+            return {
+                "email": "free.demo@example.com",
+                "nickname": "무료 체험 사용자",
+                "role": UserRole.USER,
+                "team_name": "Demo",
+                "created_at": get_kst_now(),
+                "updated_at": get_kst_now(),
+            }
+
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
         if email is None:
@@ -63,7 +74,21 @@ async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] =
     db = get_database()
     user = await db.users.find_one({"email": token_data.email})
     if user is None:
-        raise credentials_exception
+        role = payload.get("role", UserRole.USER)
+        user = {
+            "email": token_data.email,
+            "nickname": payload.get("nickname", token_data.email),
+            "role": role,
+            "team_name": payload.get("team_name", ""),
+            "created_at": get_kst_now(),
+            "updated_at": get_kst_now(),
+        }
+
+    local_settings = get_user_settings(user["email"])
+    if local_settings.get("smtp_config"):
+        user["smtp_config"] = local_settings["smtp_config"]
+    if local_settings.get("email_settings"):
+        user["email_settings"] = local_settings["email_settings"]
     return user
 
 # ===== 새로운 권한 체크 함수들 =====

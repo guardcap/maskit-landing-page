@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card'
 import { toast } from 'sonner'
 import { ArrowLeft, Mail, Calendar, Paperclip, Users, Eye, EyeOff, Shield, AlertTriangle, Info, FileText } from 'lucide-react'
+import { findMockMaskedEmail, findMockSentEmail, isMockMode } from '@/mock/demoData'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
@@ -313,6 +314,15 @@ export const SentEmailDetailPage: React.FC<SentEmailDetailPageProps> = ({
     setLoading(true)
     let hasMaskedData = false
     try {
+      if (isMockMode()) {
+        const mockOriginal = findMockSentEmail(emailId)
+        if (!mockOriginal) throw new Error('샘플 메일을 찾을 수 없습니다.')
+        setOriginalEmail(mockOriginal)
+        setMaskedEmail(findMockMaskedEmail(emailId) || null)
+        setLoading(false)
+        return
+      }
+
       const token = localStorage.getItem('auth_token')
 
       // 원본 이메일 로드 (첨부파일 포함)
@@ -428,20 +438,24 @@ export const SentEmailDetailPage: React.FC<SentEmailDetailPageProps> = ({
     return tempDiv.textContent || tempDiv.innerText || ''
   }
 
-  const renderAttachment = (attachment: AttachmentInfo, urlMap: Map<string, string>, isMasked: boolean = false) => {
-    const url = urlMap.get(attachment.filename)
-
-    // URL이 없으면 로딩 중 메시지 표시
-    if (!url) {
-      return (
-        <div className="text-center py-4 text-sm text-slate-500">
-          첨부파일 로딩 중...
-        </div>
-      )
+  const formatFileSize = (bytes?: number) => {
+    if (!bytes) return '크기 정보 없음'
+    const units = ['B', 'KB', 'MB', 'GB']
+    let size = bytes
+    let unitIndex = 0
+    while (size >= 1024 && unitIndex < units.length - 1) {
+      size /= 1024
+      unitIndex += 1
     }
+    return `${size.toFixed(size >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`
+  }
 
-    const isImage = attachment.content_type.startsWith('image/')
-    const isPDF = attachment.content_type === 'application/pdf'
+  const renderAttachment = (attachment: AttachmentInfo, urlMap: Map<string, string>, isMasked: boolean = false) => {
+    const publicUrl = (attachment as any).public_url || (attachment as any).url
+    const url = publicUrl || urlMap.get(attachment.filename)
+    const contentType = attachment.content_type || 'application/octet-stream'
+    const isImage = contentType.startsWith('image/')
+    const isPDF = contentType === 'application/pdf'
     
     // 첨부파일 박스 스타일
     const boxStyle = isMasked 
@@ -451,6 +465,32 @@ export const SentEmailDetailPage: React.FC<SentEmailDetailPageProps> = ({
     const linkStyle = isMasked 
       ? "text-primary text-sm font-medium hover:underline underline-offset-4" 
       : "text-slate-600 text-sm font-medium hover:underline underline-offset-4"
+
+    if (!url) {
+      return (
+        <div className={boxStyle}>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-start gap-2">
+              <Paperclip className={`mt-0.5 h-4 w-4 ${isMasked ? 'text-primary' : 'text-slate-400'}`} />
+              <div>
+                <p className={`text-sm font-medium ${isMasked ? 'text-slate-800' : 'text-slate-700'}`}>
+                  {attachment.filename}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {contentType || '파일'} · {formatFileSize(attachment.size)}
+                </p>
+              </div>
+            </div>
+            <Badge variant="secondary" className="shrink-0 text-xs">
+              샘플 메타데이터
+            </Badge>
+          </div>
+          <p className="mt-3 text-xs text-slate-500">
+            무료 mock 데이터에는 실제 파일 바이너리가 없어 미리보기 대신 파일 정보만 표시합니다.
+          </p>
+        </div>
+      )
+    }
 
     if (isImage) {
       return (

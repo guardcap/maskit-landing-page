@@ -20,7 +20,7 @@ from pydantic import BaseModel
 
 from app.audit.logger import AuditLogger
 from app.auth.auth_utils import get_current_user
-from app.vectordb.rag_masking import decide_all_pii_with_rag
+from app.vectordb.rag_masking import decide_all_pii_with_rag, prepare_privacy_safe_analysis_context
 from app.utils.masking_rules import MaskingRules
 
 load_dotenv()
@@ -35,7 +35,18 @@ STAGING_DIR = BASE_DIR / "app" / "rag" / "data" / "staging"
 STAGING_DIR.mkdir(parents=True, exist_ok=True)
 
 # OpenAI 클라이언트
-openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+openai_client = None
+
+
+def get_openai_client():
+    global openai_client
+
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        return None
+    if openai_client is None:
+        openai_client = OpenAI(api_key=api_key)
+    return openai_client
 
 # OpenAI Vector Store 설정
 VECTOR_STORE_ID = os.getenv("OPENAI_VECTOR_STORE_ID")
@@ -165,8 +176,12 @@ def search_openai_vector_store(query: str, top_k: int = 5) -> List[Dict]:
     OpenAI Vector Store에서 검색
     """
     try:
+        client = get_openai_client()
+        if client is None or not VECTOR_STORE_ID:
+            return []
+
         # File Search를 사용하여 Vector Store 검색
-        response = openai_client.responses.create(
+        response = client.responses.create(
             model="gpt-4o-mini",
             input=query,
             tools=[{
@@ -200,12 +215,16 @@ async def search_with_assistant(query: str, context: Dict = None) -> List[Dict]:
     OpenAI Assistants API의 File Search 도구를 사용하여 Vector Store 검색
     """
     try:
+        client = get_openai_client()
+        if client is None or not VECTOR_STORE_ID:
+            return []
+
         # 컨텍스트 정보를 쿼리에 추가
         receiver_type = context.get('receiver_type', 'external') if context else 'external'
         enhanced_query = f"이메일 {receiver_type} 전송 시 개인정보 마스킹 가이드라인: {query}"
 
         # Responses API로 File Search 수행
-        response = openai_client.responses.create(
+        response = client.responses.create(
             model="gpt-4o-mini",
             input=enhanced_query,
             tools=[{
@@ -503,9 +522,13 @@ async def get_vectordb_stats():
         vector_store_status = "unknown"
         vector_store_file_count = 0
         try:
-            vs = openai_client.vector_stores.retrieve(VECTOR_STORE_ID)
-            vector_store_status = vs.status if hasattr(vs, 'status') else "active"
-            vector_store_file_count = vs.file_counts.total if hasattr(vs, 'file_counts') else 0
+            client = get_openai_client()
+            if client is None or not VECTOR_STORE_ID:
+                vector_store_status = "not_configured"
+            else:
+                vs = client.vector_stores.retrieve(VECTOR_STORE_ID)
+                vector_store_status = vs.status if hasattr(vs, 'status') else "active"
+                vector_store_file_count = vs.file_counts.total if hasattr(vs, 'file_counts') else 0
         except Exception as e:
             print(f"Vector Store 조회 실패: {e}")
             vector_store_status = "error"
@@ -561,8 +584,8 @@ async def analyze_email_with_rag_stream(
             relevant_guides = await search_with_assistant(search_query, request.context)
 
             if not relevant_guides:
-                yield f"data: {json.dumps({'type': 'error', 'message': 'Vector Store 검색 결과 없음'})}\n\n"
-                return
+                log_progress("⚠️ Vector Store 검색 결과 없음, AOAI web search 판단으로 계속 진행")
+                relevant_guides = []
 
             # PII 분석 시작
             total_pii = len(request.detected_pii)
@@ -573,18 +596,32 @@ async def analyze_email_with_rag_stream(
             from app.utils.masking_rules import MaskingRules
 
             decisions = {}
+            analysis_context = prepare_privacy_safe_analysis_context(
+                email_body=request.email_body,
+                email_subject=request.email_subject,
+                detected_pii=request.detected_pii,
+                context=request.context,
+            )
+            pii_contexts = analysis_context.get("pii_contexts", [])
+
             for i, pii in enumerate(request.detected_pii):
                 pii_type = pii.get('type', '')
                 pii_value = pii.get('value', '')
 
-                # 터미널 로그 출력 (기존 방식)
-                log_progress(f"[RAG] PII #{i+1}/{total_pii}: type={pii_type}, value={pii_value[:10]}...")
+                # 터미널 로그 출력. 실제 PII 값은 로그에 남기지 않습니다.
+                log_progress(f"[RAG] PII #{i+1}/{total_pii}: type={pii_type}, value=<redacted>")
 
                 # UI에는 진행률만 전송
                 yield f"data: {json.dumps({'type': 'progress', 'current': i + 1, 'total': total_pii})}\n\n"
 
                 # RAG 분석
-                decision = await decide_masking_with_rag(pii_type, pii_value, request.context, relevant_guides)
+                decision = await decide_masking_with_rag(
+                    pii_type,
+                    pii_value,
+                    analysis_context,
+                    relevant_guides,
+                    pii_context=pii_contexts[i] if i < len(pii_contexts) else None,
+                )
 
                 masked_value = None
                 if decision['should_mask']:
@@ -603,6 +640,9 @@ async def analyze_email_with_rag_stream(
                     "legal_basis": decision.get("legal_basis", ""),
                     "cited_guidelines": decision.get("cited_guidelines", []),
                     "masking_method": decision.get("masking_method", "none"),
+                    "reasoning": "\n".join(decision.get("reasoning_steps", [])),
+                    "search_query_used": decision.get("search_query_used"),
+                    "pii_context": decision.get("pii_context"),
                     "risk_level": (
                         "high" if pii_type.lower() in ['jumin', 'resident_id', 'account', 'bank_account', 'card_number', 'passport', 'driver_license']
                         else "medium" if pii_type.lower() in ['person', 'email', 'phone', 'address'] and decision['should_mask']
@@ -671,8 +711,8 @@ async def analyze_email_with_rag(
         relevant_guides = await search_with_assistant(search_query, request.context)
 
         if not relevant_guides:
-            log_progress("⚠️ Vector Store 검색 결과 없음, fallback 사용")
-            return fallback_analysis(request)
+            log_progress("⚠️ Vector Store 검색 결과 없음, AOAI web search 판단으로 계속 진행")
+            relevant_guides = []
 
         log_progress(f"✅ {len(relevant_guides)}개 가이드라인 검색됨")
 
@@ -692,7 +732,9 @@ async def analyze_email_with_rag(
             request.detected_pii,
             request.context,
             relevant_guides,
-            progress_callback=log_progress
+            progress_callback=log_progress,
+            email_body=request.email_body,
+            email_subject=request.email_subject,
         )
 
         # AI 요약 생성

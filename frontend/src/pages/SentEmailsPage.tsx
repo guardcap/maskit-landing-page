@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Mail, Clock, Paperclip, ArrowLeft, Search, Filter } from 'lucide-react'
+import { getMockSentEmails, isMockMode } from '@/mock/demoData'
 
 interface Email {
   _id: string
@@ -47,6 +48,12 @@ export function SentEmailsPage({ onNavigate, onBack }: SentEmailsPageProps) {
   const loadSentEmails = async () => {
     try {
       setLoading(true)
+      if (isMockMode()) {
+        setEmails(getMockSentEmails())
+        setError(null)
+        return
+      }
+
       const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
       const token = localStorage.getItem('auth_token')
 

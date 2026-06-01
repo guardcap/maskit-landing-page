@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
 import { ModernAppLayout } from '@/components/ModernAppLayout'
+import { LandingPage } from '@/pages/LandingPage'
 import { LoginPage } from '@/pages/LoginPage'
+import { AdminLoginPage } from '@/pages/AdminLoginPage'
+import { AdminSettingsPage } from '@/pages/AdminSettingsPage'
 import { RegisterPage } from '@/pages/RegisterPage'
 import { PolicyListPage } from '@/pages/PolicyListPage'
 import { PolicyAddPage } from '@/pages/PolicyAddPage'
@@ -19,9 +22,9 @@ import DecisionLogsPage from '@/pages/DecisionLogsPage'
 import UserManagementPage from '@/pages/UserManagementPage'
 import EntityManagementPage from '@/pages/EntityManagementPage'
 import RootDashboardPage from '@/pages/RootDashboardPage'
-import { Home, FileText, Shield, Users, Plus, Mail, User, Inbox, MailOpen } from 'lucide-react'
+import { Home, FileText, Shield, Users, Plus, Mail, User, Inbox, MailOpen, ServerCog } from 'lucide-react'
 
-type Page = 'login' | 'register' | 'main'
+type Page = 'landing' | 'login' | 'admin-login' | 'register' | 'main'
 
 interface User {
   userId: string
@@ -66,7 +69,7 @@ const restoreUserFromStorage = (): User | null => {
 }
 
 function App() {
-  const [currentPage, setCurrentPage] = useState<Page>('login')
+  const [currentPage, setCurrentPage] = useState<Page>('landing')
   const [user, setUser] = useState<User | null>(null)
   const [currentView, setCurrentView] = useState('main')
   const [selectedPolicyId, setSelectedPolicyId] = useState<string | null>(null)
@@ -89,6 +92,36 @@ function App() {
     setCurrentPage('main')
   }
 
+  const handleAdminLogin = (userData: any) => {
+    setUser(userData)
+    setCurrentView('admin-settings')
+    setCurrentPage('main')
+  }
+
+  const handleStartFree = () => {
+    const mockUser = {
+      email: 'free.demo@example.com',
+      nickname: '무료 체험 사용자',
+      team_name: 'Demo',
+      role: 'user',
+      plan: 'free_mock',
+    }
+
+    localStorage.setItem('auth_token', 'mock-free-token')
+    localStorage.setItem('user', JSON.stringify(mockUser))
+    localStorage.setItem('maskit_mock_mode', 'true')
+
+    setUser({
+      userId: mockUser.email,
+      userName: mockUser.nickname,
+      userEmail: mockUser.email,
+      userTeam: mockUser.team_name,
+      userRole: mockUser.role,
+    })
+    setCurrentView('main')
+    setCurrentPage('main')
+  }
+
   const handleRegister = (userData: any) => {
     console.log('회원가입 데이터:', userData)
     alert('회원가입이 완료되었습니다!')
@@ -98,14 +131,56 @@ function App() {
   const handleLogout = () => {
     localStorage.removeItem('auth_token')
     localStorage.removeItem('user')
+    localStorage.removeItem('maskit_mock_mode')
 
     setUser(null)
-    setCurrentPage('login')
+    setCurrentPage('landing')
     setCurrentView('main')
   }
 
   // 역할별 사이드바 메뉴 생성
   const getSidebarMenuByRole = (userRole: string) => {
+    if (userRole === 'root_admin') {
+      return [
+        {
+          id: 'main',
+          label: 'API 연동 설정',
+          icon: <ServerCog className="h-4 w-4" />,
+          onClick: () => setCurrentView('main'),
+        },
+        {
+          id: 'write-email',
+          label: '메일 쓰기',
+          icon: <Mail className="h-4 w-4" />,
+          onClick: () => setCurrentView('write-email'),
+        },
+        {
+          id: 'received-emails',
+          label: '받은 메일함',
+          icon: <Inbox className="h-4 w-4" />,
+          onClick: () => setCurrentView('received-emails'),
+        },
+        {
+          id: 'my-emails',
+          label: '보낸 메일함',
+          icon: <MailOpen className="h-4 w-4" />,
+          onClick: () => setCurrentView('my-emails'),
+        },
+        {
+          id: 'logs',
+          label: '프라이버시 보호 이력',
+          icon: <FileText className="h-4 w-4" />,
+          onClick: () => setCurrentView('logs'),
+        },
+        {
+          id: 'mypage',
+          label: 'SMTP 설정',
+          icon: <User className="h-4 w-4" />,
+          onClick: () => setCurrentView('mypage'),
+        },
+      ]
+    }
+
     const baseMenu = [
       {
         id: 'main',
@@ -152,18 +227,6 @@ function App() {
       )
     }
 
-    // Root Admin 전용 메뉴
-    if (userRole === 'root_admin') {
-      baseMenu.push(
-        {
-          id: 'users',
-          label: '사용자 관리',
-          icon: <Users className="h-4 w-4" />,
-          onClick: () => setCurrentView('users'),
-        },
-      )
-    }
-
     // 공통 메뉴
     baseMenu.push(
       {
@@ -183,12 +246,31 @@ function App() {
     return baseMenu
   }
 
-  // 로그인 페이지
+  if (currentPage === 'landing') {
+    return (
+      <LandingPage
+        onStartFree={handleStartFree}
+        onAdminLogin={() => setCurrentPage('admin-login')}
+      />
+    )
+  }
+
   if (currentPage === 'login') {
     return (
       <LoginPage
         onLogin={handleLogin}
         onShowRegister={() => setCurrentPage('register')}
+        onBack={() => setCurrentPage('landing')}
+        onStartFree={handleStartFree}
+      />
+    )
+  }
+
+  if (currentPage === 'admin-login') {
+    return (
+      <AdminLoginPage
+        onLogin={handleAdminLogin}
+        onBack={() => setCurrentPage('landing')}
       />
     )
   }
@@ -218,17 +300,10 @@ function App() {
       {currentView === 'main' && (
         <>
           {user?.userRole === 'root_admin' && (
-            <UserManagementPage />
+            <AdminSettingsPage />
           )}
           {user?.userRole === 'auditor' && (
-            <AuditorDashboardPage
-              onNavigate={(view, emailId) => {
-                setCurrentView(view)
-                if (emailId) {
-                  setSelectedEmailId(emailId)
-                }
-              }}
-            />
+            <AuditorDashboardPage />
           )}
           {user?.userRole === 'policy_admin' && (
             <PolicyListPage
@@ -301,6 +376,8 @@ function App() {
       {currentView === 'entity-management' && <EntityManagementPage />}
 
       {currentView === 'root-dashboard' && <RootDashboardPage />}
+
+      {currentView === 'admin-settings' && <AdminSettingsPage />}
 
       {/* ✅ 보낸 메일 상세 페이지 */}
       {currentView === 'sent-email-detail' && selectedEmailId && (

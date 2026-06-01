@@ -6,11 +6,32 @@
 from fastapi import APIRouter, HTTPException, status, Depends
 from typing import Optional
 from pydantic import BaseModel, EmailStr
+from pathlib import Path
+from dotenv import set_key, load_dotenv
+import os
 
-from app.database.mongodb import get_database
-from app.auth.auth_utils import get_current_user
+from app.auth.auth_utils import get_current_user, get_current_root_admin
+from app.local_store import get_user_settings, update_user_settings
 
 router = APIRouter(prefix="/api/settings", tags=["Settings"])
+
+ENV_PATH = Path(__file__).resolve().parents[3] / ".env"
+MASKED_STORED_SECRET = "********"
+MANAGED_ENV_KEYS = [
+    "OPENAI_API_KEY",
+    "OPENAI_MODEL",
+    "OPENAI_VECTOR_STORE_ID",
+    "AZURE_OPENAI_API_KEY",
+    "AZURE_OPENAI_ENDPOINT",
+    "AZURE_OPENAI_BASE_URL",
+    "AZURE_OPENAI_DEPLOYMENT",
+    "AZURE_OPENAI_MODEL",
+    "AZURE_OPENAI_WEB_SEARCH_TOOL",
+    "AZURE_OPENAI_WEB_SEARCH_CONTEXT_SIZE",
+    "CLOVA_OCR_URL",
+    "CLOVA_OCR_SECRET",
+    "NAVER_APP_PASSWORD",
+]
 
 
 # ===== Pydantic 모델 정의 =====
@@ -33,12 +54,51 @@ class AllSettingsResponse(BaseModel):
     smtp_settings: Optional[SMTPSettings] = None
 
 
+class RuntimeEnvSettings(BaseModel):
+    openai_api_key: Optional[str] = None
+    openai_model: str = "gpt-4o"
+    openai_vector_store_id: Optional[str] = None
+    azure_openai_api_key: Optional[str] = None
+    azure_openai_endpoint: Optional[str] = None
+    azure_openai_base_url: Optional[str] = None
+    azure_openai_deployment: Optional[str] = None
+    azure_openai_model: Optional[str] = None
+    azure_openai_web_search_tool: str = "web_search"
+    azure_openai_web_search_context_size: str = "low"
+    clova_ocr_url: Optional[str] = None
+    clova_ocr_secret: Optional[str] = None
+    naver_app_password: Optional[str] = None
+
+
+class RuntimeEnvStatus(BaseModel):
+    configured: bool
+    env_path: str
+    values: dict
+
+
+def _mask_secret(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    if len(value) <= 8:
+        return "*" * len(value)
+    return f"{value[:4]}...{value[-4:]}"
+
+
+def _runtime_env_status() -> RuntimeEnvStatus:
+    load_dotenv(dotenv_path=ENV_PATH, override=True)
+    values = {key: _mask_secret(os.getenv(key)) for key in MANAGED_ENV_KEYS}
+    return RuntimeEnvStatus(
+        configured=bool(os.getenv("OPENAI_API_KEY") or os.getenv("AZURE_OPENAI_API_KEY")),
+        env_path=str(ENV_PATH),
+        values=values,
+    )
+
+
 # ===== API 엔드포인트 =====
 
 @router.get("/all", response_model=AllSettingsResponse)
 async def get_all_settings(
     current_user: dict = Depends(get_current_user),
-    db = Depends(get_database)
 ):
     """
     사용자의 모든 설정 조회
@@ -49,12 +109,16 @@ async def get_all_settings(
         email_settings = None
         smtp_settings = None
 
-        # 사용자 문서에서 설정 가져오기
-        if "email_settings" in current_user and current_user["email_settings"]:
-            email_settings = EmailSettings(**current_user["email_settings"])
+        local_settings = get_user_settings(current_user["email"])
 
-        if "smtp_config" in current_user and current_user["smtp_config"]:
-            smtp_settings = SMTPSettings(**current_user["smtp_config"])
+        if local_settings.get("email_settings"):
+            email_settings = EmailSettings(**local_settings["email_settings"])
+
+        if local_settings.get("smtp_config"):
+            smtp_config = dict(local_settings["smtp_config"])
+            if smtp_config.get("smtp_password"):
+                smtp_config["smtp_password"] = MASKED_STORED_SECRET
+            smtp_settings = SMTPSettings(**smtp_config)
 
         return AllSettingsResponse(
             email_settings=email_settings,
@@ -74,23 +138,12 @@ async def get_all_settings(
 async def save_email_settings(
     settings: EmailSettings,
     current_user: dict = Depends(get_current_user),
-    db = Depends(get_database)
 ):
     """
     이메일 기본 설정 저장
     """
     try:
-        # 사용자 문서 업데이트
-        result = await db.users.update_one(
-            {"email": current_user["email"]},
-            {"$set": {"email_settings": settings.dict()}}
-        )
-
-        if result.modified_count == 0 and result.matched_count == 0:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="사용자를 찾을 수 없습니다"
-            )
+        update_user_settings(current_user["email"], {"email_settings": settings.dict()})
 
         return {
             "success": True,
@@ -113,7 +166,6 @@ async def save_email_settings(
 async def save_smtp_settings(
     settings: SMTPSettings,
     current_user: dict = Depends(get_current_user),
-    db = Depends(get_database)
 ):
     """
     SMTP 서버 설정 저장
@@ -123,21 +175,12 @@ async def save_smtp_settings(
         print(f"[Settings] 사용자 이메일: {current_user['email']}")
         print(f"[Settings] 저장할 설정: {dict((k, v if k != 'smtp_password' else '***') for k, v in settings.dict().items())}")
 
-        # 사용자 문서 업데이트
-        result = await db.users.update_one(
-            {"email": current_user["email"]},
-            {"$set": {"smtp_config": settings.dict()}}
-        )
+        smtp_config = settings.dict()
+        if smtp_config.get("smtp_password") == MASKED_STORED_SECRET:
+            existing = get_user_settings(current_user["email"]).get("smtp_config", {})
+            smtp_config["smtp_password"] = existing.get("smtp_password", "")
 
-        print(f"[Settings] matched_count: {result.matched_count}")
-        print(f"[Settings] modified_count: {result.modified_count}")
-
-        if result.modified_count == 0 and result.matched_count == 0:
-            print(f"[Settings] ❌ 사용자를 찾을 수 없습니다!")
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="사용자를 찾을 수 없습니다"
-            )
+        update_user_settings(current_user["email"], {"smtp_config": smtp_config})
 
         print(f"[Settings] ✅ SMTP 설정 저장 완료")
         print(f"[Settings] ===== SMTP 설정 저장 끝 =====\n")
@@ -166,7 +209,6 @@ async def save_smtp_settings(
 async def test_smtp_connection(
     settings: SMTPSettings,
     current_user: dict = Depends(get_current_user),
-    db = Depends(get_database)
 ):
     """
     SMTP 연결 테스트
@@ -291,4 +333,60 @@ async def test_smtp_connection(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=error_msg + hint
+        )
+
+
+@router.get("/runtime-env", response_model=RuntimeEnvStatus)
+async def get_runtime_env_status(
+    current_user: dict = Depends(get_current_root_admin),
+):
+    """
+    실제 API 연동 환경변수 설정 상태 조회.
+    ROOT 관리자만 접근 가능합니다.
+    """
+    return _runtime_env_status()
+
+
+@router.post("/runtime-env", response_model=RuntimeEnvStatus)
+async def save_runtime_env_settings(
+    settings: RuntimeEnvSettings,
+    current_user: dict = Depends(get_current_root_admin),
+):
+    """
+    실제 API 연동에 필요한 키를 서버 .env와 현재 프로세스 환경변수에 저장.
+    빈 값은 기존 값을 유지합니다.
+    """
+    try:
+        ENV_PATH.touch(exist_ok=True)
+        ENV_PATH.chmod(0o600)
+
+        updates = {
+            "OPENAI_API_KEY": settings.openai_api_key,
+            "OPENAI_MODEL": settings.openai_model,
+            "OPENAI_VECTOR_STORE_ID": settings.openai_vector_store_id,
+            "AZURE_OPENAI_API_KEY": settings.azure_openai_api_key,
+            "AZURE_OPENAI_ENDPOINT": settings.azure_openai_endpoint,
+            "AZURE_OPENAI_BASE_URL": settings.azure_openai_base_url,
+            "AZURE_OPENAI_DEPLOYMENT": settings.azure_openai_deployment,
+            "AZURE_OPENAI_MODEL": settings.azure_openai_model,
+            "AZURE_OPENAI_WEB_SEARCH_TOOL": settings.azure_openai_web_search_tool,
+            "AZURE_OPENAI_WEB_SEARCH_CONTEXT_SIZE": settings.azure_openai_web_search_context_size,
+            "CLOVA_OCR_URL": settings.clova_ocr_url,
+            "CLOVA_OCR_SECRET": settings.clova_ocr_secret,
+            "NAVER_APP_PASSWORD": settings.naver_app_password,
+        }
+
+        for key, value in updates.items():
+            if value is None or value == "":
+                continue
+            set_key(str(ENV_PATH), key, value)
+            os.environ[key] = value
+
+        ENV_PATH.chmod(0o600)
+        load_dotenv(dotenv_path=ENV_PATH, override=True)
+        return _runtime_env_status()
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"환경변수 저장 중 오류가 발생했습니다: {str(e)}",
         )

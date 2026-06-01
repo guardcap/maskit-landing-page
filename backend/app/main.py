@@ -57,7 +57,7 @@ async def lifespan(app: FastAPI):
 
     # MongoDB 연결
     await connect_to_mongo()
-    print("[App] ✅ MongoDB 연결 완료\n")
+    print("[App] ✅ 데이터 저장소 준비 완료\n")
 
     # SMTP 서버 시작
     smtp_task = asyncio.create_task(start_smtp_server())

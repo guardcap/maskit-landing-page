@@ -6,7 +6,7 @@ from typing import Optional, Any # <<< [수정] Any 또는 dict를 위해 추가
 from datetime import datetime,timedelta
 from bson import ObjectId
 from app.utils.datetime_utils import get_kst_now
-from app.database.mongodb import get_database, SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_USE_TLS, SMTP_USE_SSL # 기본 설정 Import
+from app.database.mongodb import get_database
 from app.smtp_server.models import EmailSendRequest, EmailSendResponse, EmailListResponse
 from app.smtp_server.client import smtp_client
 from app.audit.logger import AuditLogger
@@ -45,6 +45,15 @@ async def send_email(
         print(f"[SMTP Send] masked_email_id: {email_data.masked_email_id}")
         print(f"[SMTP Send] 요청의 attachments: {email_data.attachments}")
         print("="*80 + "\n")
+
+        if current_user.get("email") == "free.demo@example.com":
+            print("[SMTP Send] 무료 체험 사용자: 실제 SMTP 없이 mock 전송 성공 처리")
+            return EmailSendResponse(
+                success=True,
+                message="무료 체험 mock 전송 완료",
+                email_id=f"mock-smtp-{int(get_kst_now().timestamp())}",
+                sent_at=get_kst_now(),
+            )
 
         # 첨부파일 준비
         attachments_to_send = []
@@ -109,23 +118,11 @@ async def send_email(
         user_smtp_config = current_user.get("smtp_config")
 
         if not user_smtp_config or not user_smtp_config.get("smtp_host"):
-            print(f"[SMTP Send] ⚠️ 사용자 SMTP 설정이 없어 기본 서버 설정을 사용합니다.")
-
-            if not SMTP_HOST or not SMTP_USER or not SMTP_PASSWORD:
-                print(f"[SMTP Send] ❌ 기본 SMTP 설정도 없습니다!")
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="SMTP 설정이 없습니다. 설정 페이지에서 SMTP 설정을 저장하거나, 관리자에게 문의하세요."
-                )
-
-            smtp_config = {
-                "smtp_host": SMTP_HOST,
-                "smtp_port": SMTP_PORT,
-                "smtp_user": SMTP_USER,
-                "smtp_password": SMTP_PASSWORD,
-                "smtp_use_tls": SMTP_USE_TLS,
-                "smtp_use_ssl": SMTP_USE_SSL,
-            }
+            print(f"[SMTP Send] ❌ 사용자 SMTP 설정이 없습니다.")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="SMTP 설정이 없습니다. 마이페이지에서 SMTP 설정을 먼저 저장해주세요."
+            )
         else:
             print(f"[SMTP Send] ✅ 사용자 저장된 SMTP 설정을 사용합니다.")
             smtp_config = user_smtp_config

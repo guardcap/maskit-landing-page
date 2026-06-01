@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { Send } from 'lucide-react'
+import { isMockMode, mockMaskedUnstructuredAttachment, mockUnstructuredAttachment, saveMockProcessedEmail } from '@/mock/demoData'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
@@ -145,7 +146,7 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
 
   // MongoDB에서 원본 이메일 불러오기
   useEffect(() => {
-    if (emailData.email_id) {
+    if (emailData.email_id && !isMockMode()) {
       loadOriginalEmail(emailData.email_id)
     }
   }, [emailData.email_id])
@@ -287,9 +288,13 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
       }
     } else {
       console.log('⚠️ originalEmailData.attachments가 없거나 비어있음')
-      // 기존 방식 (file_id 사용)
+      // 작성 화면에서 넘어온 File 객체 또는 기존 file_id 사용
       for (const attachment of emailData.attachments) {
-        if ((attachment as any).file_id) {
+        if (attachment instanceof File) {
+          const url = URL.createObjectURL(attachment)
+          urlMap.set(attachment.name, url)
+          console.log(`✅ 로컬 첨부파일 URL 생성: ${attachment.name}`)
+        } else if ((attachment as any).file_id) {
           try {
             const token = localStorage.getItem('auth_token')
             const response = await fetch(`${API_BASE_URL}/api/v1/emails/attachments/${(attachment as any).file_id}`, {
@@ -329,17 +334,86 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
       return
     }
 
-    if (!originalEmailData) {
-      toast.error('원본 이메일 데이터를 불러오는 중입니다.')
-      return
-    }
-
     setIsAnalyzing(true)
     setAiSummary('1단계: 이메일 본문에서 PII 추출 중...')
 
     try {
+      if (isMockMode()) {
+        setAiSummary('무료 체험 mock 분석 중...')
+        await new Promise((resolve) => setTimeout(resolve, 500))
+
+        const mockPII = [
+          { id: 'pii_mock_0', type: 'PERSON', value: '홍길동', source: 'backend_body' as const },
+          { id: 'pii_mock_1', type: 'phone', value: '010-1234-5678', source: 'regex' as const },
+          { id: 'pii_mock_2', type: 'jumin', value: '900101-1234567', source: 'regex' as const },
+          { id: 'pii_mock_3', type: 'ORGANIZATION', value: 'MASKIT', source: 'backend_body' as const },
+        ]
+        const decisions: Record<string, MaskingDecision> = {
+          pii_0: {
+            type: 'PERSON',
+            value: '홍길동',
+            should_mask: true,
+            reason: '외부 수신자에게 전달되는 개인 이름은 부분 마스킹 권장',
+            masked_value: '홍*동',
+            risk_level: 'medium',
+            reasoning: '무료 체험 mock 판단입니다. 실제 관리자 API 설정 시 AOAI 판단으로 대체됩니다.',
+            cited_guidelines: ['개인정보 최소 공개 원칙'],
+          },
+          pii_1: {
+            type: 'phone',
+            value: '010-1234-5678',
+            should_mask: true,
+            reason: '휴대폰 번호는 직접 식별 및 연락 가능한 개인정보',
+            masked_value: '010-****-5678',
+            risk_level: 'high',
+            reasoning: '외부 전송 문맥에서는 업무상 필수 정보가 아니면 보호 처리합니다.',
+            cited_guidelines: ['연락처 보호 기준'],
+          },
+          pii_2: {
+            type: 'jumin',
+            value: '900101-1234567',
+            should_mask: true,
+            reason: '주민등록번호는 고위험 고유식별정보',
+            masked_value: '900101-*******',
+            risk_level: 'high',
+            reasoning: '전체 번호 노출을 차단하는 것이 안전합니다.',
+            cited_guidelines: ['고유식별정보 처리 제한'],
+          },
+          pii_3: {
+            type: 'ORGANIZATION',
+            value: 'MASKIT',
+            should_mask: false,
+            reason: '메일 목적상 필요한 조직명으로 판단',
+            masked_value: 'MASKIT',
+            risk_level: 'low',
+            reasoning: '프로젝트/조직 식별 목적의 일반 업무 정보입니다.',
+            cited_guidelines: ['업무상 필요 정보 예외'],
+          },
+        }
+
+        const piiList = mockPII.map((pii, index) => ({
+          ...pii,
+          shouldMask: decisions[`pii_${index}`].should_mask,
+          maskingDecision: decisions[`pii_${index}`],
+          pii_id: `pii_${index}`,
+        }))
+
+        setMaskingDecisions(decisions)
+        setAllPIIList(piiList)
+        setShowPIICheckboxList(true)
+        setAiSummary('무료 체험 mock 분석 완료: 4개 항목 중 3개 마스킹 권장')
+        setAnalysisProgress('')
+        toast.success('Mock AI 분석 완료! API 키 없이 샘플 판단을 적용했습니다.')
+        return
+      }
+
       // ==================== 1단계: 이메일 본문 PII 추출 ====================
-      const emailBody = originalEmailData?.original_body || originalEmailData?.body || ''
+      const sourceEmailData = originalEmailData || {
+        original_body: emailData.body,
+        body: emailData.body,
+        attachments: emailData.attachments || [],
+      }
+      const emailBody = sourceEmailData?.original_body || sourceEmailData?.body || ''
 
       let bodyPIIEntities: DetectedPIIEntity[] = []
       if (emailBody) {
@@ -364,8 +438,12 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
 
       let attachmentPIIList: Array<{ filename: string; entities: DetectedPIIEntity[] }> = []
 
-      if (originalEmailData.attachments && originalEmailData.attachments.length > 0) {
-        const attachmentPromises = originalEmailData.attachments.map(async (attachment: any) => {
+      if (sourceEmailData.attachments && sourceEmailData.attachments.length > 0) {
+        const attachmentPromises = sourceEmailData.attachments.map(async (attachment: any) => {
+          if (!attachment.data) {
+            return { filename: attachment.filename || attachment.name || 'attachment', entities: [] }
+          }
+
           const filename = attachment.filename
 
           // Base64 → Blob
@@ -887,6 +965,20 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
       setMaskedBody(tempMaskedBody)
       setMaskingDecisions(updatedDecisions) // 업데이트된 decision 저장
 
+      if (isMockMode()) {
+        const hasMockUnstructured = (originalEmailData?.attachments || emailData.attachments).some((attachment: any) =>
+          (attachment.filename || attachment.name) === mockUnstructuredAttachment.filename
+        )
+        if (hasMockUnstructured) {
+          setMaskedAttachmentFilenames([mockMaskedUnstructuredAttachment.filename])
+          setMaskedAttachmentUrls(new Map([[mockMaskedUnstructuredAttachment.filename, mockMaskedUnstructuredAttachment.public_url]]))
+        }
+        toast.dismiss('masking-only')
+        toast.success('Mock 비정형 첨부파일 마스킹 완료!')
+        setShowMaskedPreview(true)
+        return
+      }
+
       // ==================== 2단계: 첨부파일 마스킹 ====================
       const attachmentPIIs = checkedPIIs.filter(pii => pii.source === 'backend_attachment' && pii.filename)
 
@@ -1136,6 +1228,27 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
     toast.loading('이메일 전송 준비 중...', { id: 'sending-email' })
 
     try {
+      if (isMockMode()) {
+        await new Promise((resolve) => setTimeout(resolve, 600))
+        const user = JSON.parse(localStorage.getItem('user') || '{}')
+        saveMockProcessedEmail({
+          emailId: emailData.email_id,
+          from: emailData.from,
+          to: emailData.to,
+          subject: emailData.subject,
+          originalBody: emailData.body,
+          maskedBody: maskedBody || emailData.body,
+          attachments: emailData.attachments,
+          maskingDecisions,
+          actorEmail: user.email || emailData.from,
+          actorRole: user.role || 'user',
+        })
+        toast.dismiss('sending-email')
+        toast.success('무료 체험 mock 전송 완료!')
+        onSendComplete?.()
+        return
+      }
+
       // ==================== 1단계: 마스킹된 이메일 MongoDB 저장 ====================
       if (emailData.email_id && showMaskedPreview) {
         try {
@@ -1272,15 +1385,26 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
   // 첨부파일 렌더링 (MongoDB 데이터 사용)
   const renderAttachment = (attachment: AttachmentInfo | any) => {
     // filename을 키로 사용 (MongoDB 데이터의 경우)
-    const url = attachmentUrls.get(attachment.filename) || attachmentUrls.get(attachment.file_id)
+    const url = attachment.public_url || attachment.url || attachmentUrls.get(attachment.filename) || attachmentUrls.get(attachment.name) || attachmentUrls.get(attachment.file_id)
+    const filename = attachment.filename || attachment.name || 'attachment'
+    const contentType = attachment.content_type || attachment.type || 'application/octet-stream'
+    const size = attachment.size ? `${Math.round(attachment.size / 1024)} KB` : '크기 정보 없음'
 
     if (!url) {
       console.log('첨부파일 URL 없음:', attachment.filename, 'Available keys:', Array.from(attachmentUrls.keys()))
-      return <div className="text-sm text-gray-500">로딩 중...</div>
+      return (
+        <div className="rounded border bg-muted/30 p-3 text-sm">
+          <div className="font-medium text-foreground">{filename}</div>
+          <div className="mt-1 text-xs text-muted-foreground">{contentType} · {size}</div>
+          <div className="mt-2 text-xs text-muted-foreground">
+            무료 mock 데이터에는 실제 파일 바이너리가 없어 미리보기 대신 파일 정보만 표시합니다.
+          </div>
+        </div>
+      )
     }
 
-    const isImage = attachment.content_type.startsWith('image/')
-    const isPDF = attachment.content_type === 'application/pdf'
+    const isImage = contentType.startsWith('image/')
+    const isPDF = contentType === 'application/pdf'
 
     if (isImage) {
       return (
@@ -1299,7 +1423,7 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
         >
           <p className="text-sm text-gray-500">
             PDF를 표시할 수 없습니다.
-            <a href={url} download={attachment.filename} className="text-blue-500 underline ml-1">
+            <a href={url} download={filename} className="text-blue-500 underline ml-1">
               다운로드
             </a>
           </p>
@@ -1309,8 +1433,8 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
 
     return (
       <div className="p-4 border rounded bg-gray-50">
-        <p className="text-sm">📄 {attachment.filename}</p>
-        <a href={url} download={attachment.filename} className="text-blue-500 text-sm underline">
+        <p className="text-sm">📄 {filename}</p>
+        <a href={url} download={filename} className="text-blue-500 text-sm underline">
           다운로드
         </a>
       </div>
@@ -1412,7 +1536,7 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
                 {/* 첨부파일 표시 */}
                 {(originalEmailData?.attachments || emailData.attachments).map((att: any, idx: number) => (
                   <div key={att.filename || att.file_id || idx} className="border-t pt-4">
-                    <h4 className="font-medium mb-2">📎 {att.filename}</h4>
+                    <h4 className="font-medium mb-2">📎 {att.filename || att.name || 'attachment'}</h4>
                     {renderAttachment(att)}
                   </div>
                 ))}
@@ -1453,13 +1577,13 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
 
                         // 마스킹된 파일이 있는지 확인
                         const maskedFilename = maskedAttachmentFilenames.find(masked =>
-                          masked === `masked_${originalFilename}`
+                          masked === `masked_${originalFilename}` || masked === originalFilename.replace(/(\.[^.]+)?$/, '_masked$1')
                         )
 
                         // 마스킹된 파일이 있으면 마스킹 URL, 없으면 원본 URL 사용
                         const url = maskedFilename
                           ? maskedAttachmentUrls.get(maskedFilename)
-                          : attachmentUrls.get(originalFilename)
+                          : (att.public_url || att.url || attachmentUrls.get(originalFilename))
 
                         const displayFilename = maskedFilename || originalFilename
                         const isMasked = !!maskedFilename

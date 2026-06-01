@@ -34,6 +34,7 @@ import {
   Filter,
   Activity
 } from 'lucide-react';
+import { getMockAuditLogs, isMockMode } from '@/mock/demoData';
 
 interface AuditLog {
   _id: string;
@@ -76,6 +77,22 @@ export default function DecisionLogsPage() {
 
     setLoading(true);
     try {
+      if (isMockMode()) {
+        const filtered = getMockAuditLogs().filter((log) => {
+          const matchesEvent = !eventTypeFilter || log.event_type === eventTypeFilter;
+          const matchesSeverity = !severityFilter || log.severity === severityFilter;
+          const matchesSearch = !searchTerm ||
+            log.user_email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            log.resource_id?.toLowerCase().includes(searchTerm.toLowerCase());
+          return matchesEvent && matchesSeverity && matchesSearch;
+        });
+        setLogs(filtered);
+        setTotal(filtered.length);
+        setTotalPages(1);
+        return;
+      }
+
       const params = new URLSearchParams({
         page: page.toString(),
         page_size: pageSize.toString(),

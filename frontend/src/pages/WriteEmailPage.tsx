@@ -21,6 +21,7 @@ import {
   ListOrdered
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { isMockMode, mockUnstructuredAttachment } from '@/mock/demoData'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
@@ -177,6 +178,20 @@ export const WriteEmailPage: React.FC<WriteEmailPageProps> = ({ onBack, onSend }
       console.log('본문 길이:', body.length)
       console.log('첨부파일:', attachments.length, '개')
       console.log('='.repeat(80))
+
+      if (isMockMode()) {
+        const mockAttachments = attachments.length > 0 ? attachments : [mockUnstructuredAttachment]
+        toast.success('무료 체험 mock 메일이 분석 단계로 전달되었습니다.')
+        onSend?.({
+          from: fromEmail,
+          to: recipients,
+          subject,
+          body,
+          attachments: mockAttachments as any,
+          email_id: `mock-draft-${Date.now()}`,
+        })
+        return
+      }
 
       // FormData 생성
       const formData = new FormData()

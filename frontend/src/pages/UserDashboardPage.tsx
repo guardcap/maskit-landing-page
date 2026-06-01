@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Mail, Paperclip, ArrowLeft, Search, Filter, Inbox, Send } from 'lucide-react'
+import { getMockSentEmails, isMockMode, mockReceivedEmails } from '@/mock/demoData'
 
 interface Email {
   _id: string
@@ -37,12 +38,18 @@ interface UserDashboardPageProps {
   onNavigate?: (view: string, emailId?: string) => void
 }
 
+const mockEmails: Email[] = [
+  ...getMockSentEmails().map((email) => ({ ...email, type: 'sent' as const, status: 'sent' as const })),
+  ...mockReceivedEmails.map((email) => ({ ...email, type: 'received' as const, status: 'received' as const })),
+].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+
 export function UserDashboardPage({ onNavigate }: UserDashboardPageProps) {
   const [emails, setEmails] = useState<Email[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [typeFilter, setTypeFilter] = useState<string>('all')
+  const mockMode = isMockMode()
 
   useEffect(() => {
     loadEmails()
@@ -51,6 +58,15 @@ export function UserDashboardPage({ onNavigate }: UserDashboardPageProps) {
   const loadEmails = async () => {
     try {
       setLoading(true)
+      if (mockMode) {
+        setEmails([
+          ...getMockSentEmails().map((email) => ({ ...email, type: 'sent' as const, status: 'sent' as const })),
+          ...mockReceivedEmails.map((email) => ({ ...email, type: 'received' as const, status: 'received' as const })),
+        ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()))
+        setError(null)
+        return
+      }
+
       const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
       const token = localStorage.getItem('auth_token')
 
@@ -112,7 +128,8 @@ export function UserDashboardPage({ onNavigate }: UserDashboardPageProps) {
       setError(null)
     } catch (err) {
       console.error('Error loading emails:', err)
-      setError(err instanceof Error ? err.message : '오류가 발생했습니다.')
+      setEmails(mockEmails)
+      setError('무료 사용자는 샘플 데이터로 기능을 미리 볼 수 있습니다.')
     } finally {
       setLoading(false)
     }
@@ -178,8 +195,13 @@ export function UserDashboardPage({ onNavigate }: UserDashboardPageProps) {
     <div className="space-y-6">
       {/* 헤더 */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">메일함</h1>
-        <p className="text-muted-foreground">받은 메일과 보낸 메일 목록</p>
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-3xl font-bold tracking-tight">메일함</h1>
+          {mockMode && <Badge variant="secondary">무료 Mock</Badge>}
+        </div>
+        <p className="text-muted-foreground">
+          {mockMode ? '샘플 메일 데이터로 MASKIT의 흐름을 미리 볼 수 있습니다.' : '받은 메일과 보낸 메일 목록'}
+        </p>
       </div>
 
       {/* 통계 카드 */}

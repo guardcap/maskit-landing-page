@@ -47,7 +47,7 @@ export function ModernAppLayout({
     ['policy-dashboard', 'policy-list', 'policy-add', 'entity-management'].includes(item.id)
   )
   const systemMenuItems = sidebarMenu.filter((item) =>
-    ['users', 'logs', 'mypage', 'settings'].includes(item.id)
+    ['users', 'logs', 'mypage', 'settings', 'admin-settings'].includes(item.id)
   )
   const mainMenuItems = sidebarMenu.filter((item) => item.id === 'main')
 

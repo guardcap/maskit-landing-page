@@ -2,6 +2,7 @@
 .env
 .env.local
 .env.*.local
+backend/app/local_data/
 .backup_old_structure/
 Guardcap-FE/
 guardcap-rag/

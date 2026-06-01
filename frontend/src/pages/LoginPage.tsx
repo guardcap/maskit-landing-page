@@ -18,11 +18,15 @@ interface LoginFormData {
 interface LoginPageProps {
   onLogin?: (data: LoginFormData) => void
   onShowRegister?: () => void
+  onBack?: () => void
+  onStartFree?: () => void
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({
   onLogin,
   onShowRegister,
+  onBack,
+  onStartFree,
 }) => {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -60,6 +64,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       // 토큰 저장
       localStorage.setItem('auth_token', data.access_token)
       localStorage.setItem('user', JSON.stringify(data.user))
+      localStorage.removeItem('maskit_mock_mode')
 
       toast.success('로그인 성공!')
 
@@ -125,6 +130,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? '로그인 중...' : '로그인'}
+            </Button>
+            <Button type="button" variant="outline" className="w-full" onClick={onStartFree}>
+              무료 체험으로 보기
+            </Button>
+            <Button type="button" variant="ghost" className="w-full" onClick={onBack}>
+              랜딩으로 돌아가기
             </Button>
           </form>
 
