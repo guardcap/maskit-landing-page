@@ -13,7 +13,7 @@
 
 ## 목업 사이트
 
-> GitHub : [https://guardcap.github.io/](https://guardcap.github.io/)
+> GitHub : [https://guardcap.github.io/maskit-landing-page/](https://guardcap.github.io/maskit-landing-page/)
 
 ## 팀 소개
 
