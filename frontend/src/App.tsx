@@ -26,13 +26,27 @@ import { Home, FileText, Shield, Users, Plus, Mail, User, Inbox, MailOpen, Serve
 
 type Page = 'landing' | 'login' | 'admin-login' | 'register' | 'main'
 
+const AUTH_TOKEN_STORAGE_KEY = 'auth_token'
+const USER_STORAGE_KEY = 'user'
+const MOCK_MODE_STORAGE_KEY = 'maskit_mock_mode'
+const FREE_TRIAL_AUTH_TOKEN = 'mock-free-token'
+const FREE_TRIAL_PLAN = 'free_mock'
+const FREE_TRIAL_USER_EMAIL = 'free.demo@example.com'
+const FREE_TRIAL_HIDDEN_MENU_IDS = ['received-emails', 'mypage']
+
 interface User {
   userId: string
   userName: string
   userEmail: string
   userTeam: string
   userRole: string
+  plan?: string
 }
+
+const isFreeTrialUser = (currentUser: User | null) =>
+  currentUser?.plan === FREE_TRIAL_PLAN ||
+  currentUser?.userEmail === FREE_TRIAL_USER_EMAIL ||
+  currentUser?.userId === FREE_TRIAL_USER_EMAIL
 
 // WriteEmailPage에서 사용하는 타입 (File 객체 사용)
 interface EmailDraftData {
@@ -47,8 +61,8 @@ interface EmailDraftData {
 // localStorage에서 사용자 정보 복원
 const restoreUserFromStorage = (): User | null => {
   try {
-    const token = localStorage.getItem('auth_token')
-    const userJson = localStorage.getItem('user')
+    const token = localStorage.getItem(AUTH_TOKEN_STORAGE_KEY)
+    const userJson = localStorage.getItem(USER_STORAGE_KEY)
 
     if (!token || !userJson) {
       return null
@@ -61,6 +75,7 @@ const restoreUserFromStorage = (): User | null => {
       userEmail: userData.email,
       userTeam: userData.team_name || '',
       userRole: userData.role || 'user',
+      plan: userData.plan,
     }
   } catch (error) {
     console.error('사용자 정보 복원 오류:', error)
@@ -100,16 +115,16 @@ function App() {
 
   const handleStartFree = () => {
     const mockUser = {
-      email: 'free.demo@example.com',
+      email: FREE_TRIAL_USER_EMAIL,
       nickname: '무료 체험 사용자',
       team_name: 'Demo',
       role: 'user',
-      plan: 'free_mock',
+      plan: FREE_TRIAL_PLAN,
     }
 
-    localStorage.setItem('auth_token', 'mock-free-token')
-    localStorage.setItem('user', JSON.stringify(mockUser))
-    localStorage.setItem('maskit_mock_mode', 'true')
+    localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, FREE_TRIAL_AUTH_TOKEN)
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(mockUser))
+    localStorage.setItem(MOCK_MODE_STORAGE_KEY, 'true')
 
     setUser({
       userId: mockUser.email,
@@ -117,6 +132,7 @@ function App() {
       userEmail: mockUser.email,
       userTeam: mockUser.team_name,
       userRole: mockUser.role,
+      plan: mockUser.plan,
     })
     setCurrentView('main')
     setCurrentPage('main')
@@ -129,9 +145,9 @@ function App() {
   }
 
   const handleLogout = () => {
-    localStorage.removeItem('auth_token')
-    localStorage.removeItem('user')
-    localStorage.removeItem('maskit_mock_mode')
+    localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY)
+    localStorage.removeItem(USER_STORAGE_KEY)
+    localStorage.removeItem(MOCK_MODE_STORAGE_KEY)
 
     setUser(null)
     setCurrentPage('landing')
@@ -243,7 +259,9 @@ function App() {
       },
     )
 
-    return baseMenu
+    return isFreeTrialUser(user)
+      ? baseMenu.filter((item) => !FREE_TRIAL_HIDDEN_MENU_IDS.includes(item.id))
+      : baseMenu
   }
 
   if (currentPage === 'landing') {

@@ -15,7 +15,8 @@ os.environ['PYTHONUNBUFFERED'] = '1'
 env_path = Path(__file__).parent.parent.parent / '.env'
 load_dotenv(dotenv_path=env_path)
 print(f"[ENV] .env 파일 로드: {env_path}", flush=True)
-print(f"[ENV] MONGODB_URI 확인: {os.getenv('MONGODB_URI', 'NOT_FOUND')[:50]}...", flush=True)
+mongodb_uri_status = "SET" if os.getenv("MONGODB_URI") else "NOT_FOUND"
+print(f"[ENV] MONGODB_URI 확인: {mongodb_uri_status}", flush=True)
 
 # Windows 한글/이모지 출력 설정 + 라인 버퍼링
 if sys.platform == 'win32':

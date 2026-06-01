@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { Send } from 'lucide-react'
-import { isMockMode, mockMaskedUnstructuredAttachment, mockUnstructuredAttachment, saveMockProcessedEmail } from '@/mock/demoData'
+import { isMockMode, mockMaskedUnstructuredAttachment, mockUnstructuredAttachment } from '@/mock/demoData'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'
 
@@ -1230,21 +1230,8 @@ export const MaskingPage: React.FC<MaskingPageProps> = ({
     try {
       if (isMockMode()) {
         await new Promise((resolve) => setTimeout(resolve, 600))
-        const user = JSON.parse(localStorage.getItem('user') || '{}')
-        saveMockProcessedEmail({
-          emailId: emailData.email_id,
-          from: emailData.from,
-          to: emailData.to,
-          subject: emailData.subject,
-          originalBody: emailData.body,
-          maskedBody: maskedBody || emailData.body,
-          attachments: emailData.attachments,
-          maskingDecisions,
-          actorEmail: user.email || emailData.from,
-          actorRole: user.role || 'user',
-        })
         toast.dismiss('sending-email')
-        toast.success('무료 체험 mock 전송 완료!')
+        toast.info('무료 체험 mock에서는 메일이 저장되거나 실제 전송되지 않습니다.')
         onSendComplete?.()
         return
       }

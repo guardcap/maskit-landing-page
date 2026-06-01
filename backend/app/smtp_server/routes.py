@@ -17,7 +17,7 @@ from app.audit.models import AuditEventType
 # 'get_current_user'가 반환하는 타입을 'dict' 또는 'Any'로 변경합니다.
 #
 # 아래 from ... import ... 부분을 실제 파일 위치에 맞게 수정해주세요.
-from app.auth.auth_utils import get_current_user # <<< [중요] 이 경로는 올바르다고 가정합니다.
+from app.auth.auth_utils import get_current_user, is_free_trial_user # <<< [중요] 이 경로는 올바르다고 가정합니다.
 # from app.auth.models import User # <<< [수정] 'User' 모델을 찾을 수 없으므로 이 라인을 제거합니다.
 
 
@@ -46,11 +46,11 @@ async def send_email(
         print(f"[SMTP Send] 요청의 attachments: {email_data.attachments}")
         print("="*80 + "\n")
 
-        if current_user.get("email") == "free.demo@example.com":
-            print("[SMTP Send] 무료 체험 사용자: 실제 SMTP 없이 mock 전송 성공 처리")
+        if is_free_trial_user(current_user):
+            print("[SMTP Send] 무료 체험 사용자: SMTP/DB 저장 없이 mock 안내 응답")
             return EmailSendResponse(
                 success=True,
-                message="무료 체험 mock 전송 완료",
+                message="무료 체험 mock에서는 메일이 저장되거나 실제 전송되지 않습니다.",
                 email_id=f"mock-smtp-{int(get_kst_now().timestamp())}",
                 sent_at=get_kst_now(),
             )

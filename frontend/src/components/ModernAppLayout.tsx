@@ -58,7 +58,7 @@ export function ModernAppLayout({
           <SidebarHeader>
             <div className="flex items-center gap-2 px-4 py-2">
               <div className="flex h-12 w-12 items-center justify-center rounded-lg overflow-hidden">
-                <img src="/logo.png" alt="Logo" className="h-12 w-12 object-contain" />
+                <img src={`${import.meta.env.BASE_URL}logo.png`} alt="Logo" className="h-12 w-12 object-contain" />
               </div>
               <div className="flex flex-col mt-1.5">
                 <span className="text-sm font-semibold">MASKIT</span>

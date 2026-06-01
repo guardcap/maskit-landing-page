@@ -17,6 +17,9 @@ load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY", "maskit-local-dev-secret-change-me")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
+FREE_TRIAL_TOKEN = "mock-free-token"
+FREE_TRIAL_EMAIL = "free.demo@example.com"
+FREE_TRIAL_PLAN = "free_mock"
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
 security = HTTPBearer(auto_error=False)
@@ -37,6 +40,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 
+def is_free_trial_user(user: dict) -> bool:
+    return user.get("email") == FREE_TRIAL_EMAIL or user.get("plan") == FREE_TRIAL_PLAN
+
 async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)):
     if not credentials:
         raise HTTPException(
@@ -53,12 +59,13 @@ async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] =
     
     try:
         token = credentials.credentials
-        if token == "mock-free-token":
+        if token == FREE_TRIAL_TOKEN:
             return {
-                "email": "free.demo@example.com",
+                "email": FREE_TRIAL_EMAIL,
                 "nickname": "무료 체험 사용자",
                 "role": UserRole.USER,
                 "team_name": "Demo",
+                "plan": FREE_TRIAL_PLAN,
                 "created_at": get_kst_now(),
                 "updated_at": get_kst_now(),
             }

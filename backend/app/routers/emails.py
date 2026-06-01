@@ -7,7 +7,7 @@ from bson import ObjectId
 
 from app.database.mongodb import get_db
 from app.utils.datetime_utils import get_kst_now
-from app.auth.auth_utils import get_current_user, get_current_auditor
+from app.auth.auth_utils import get_current_user, get_current_auditor, is_free_trial_user
 from motor.motor_asyncio import AsyncIOMotorGridFSBucket
 from app.audit.logger import AuditLogger
 from app.audit.models import AuditEventType
@@ -441,6 +441,23 @@ async def send_email(
     """
     try:
         recipients = [email.strip() for email in email_request.to.split(',')]
+
+        if is_free_trial_user(current_user):
+            print("✅ 무료 체험 mock 이메일 전송 요청: DB 저장/SMTP 전송 없이 안내 응답")
+            return JSONResponse({
+                "success": True,
+                "message": "무료 체험 mock에서는 메일이 저장되거나 실제 전송되지 않습니다.",
+                "email_ids": [],
+                "data": {
+                    "from": email_request.from_email,
+                    "to": recipients,
+                    "subject": email_request.subject,
+                    "sent_at": get_kst_now().isoformat(),
+                    "attachments": 0,
+                    "mock": True,
+                }
+            })
+
         email_ids = []
 
         attachment_records = []
@@ -593,5 +610,4 @@ async def get_received_emails(
     except Exception as e:
         print(f"❌ 받은 메일 조회 오류: {e}")
         raise HTTPException(status_code=500, detail=f"메일 조회 실패: {str(e)}")
-
 

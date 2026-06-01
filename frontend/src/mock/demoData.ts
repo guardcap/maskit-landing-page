@@ -2,160 +2,320 @@ const now = Date.now()
 const MOCK_SENT_STORAGE_KEY = 'maskit_mock_sent_emails'
 const MOCK_MASKED_STORAGE_KEY = 'maskit_mock_masked_emails'
 const MOCK_AUDIT_STORAGE_KEY = 'maskit_mock_audit_logs'
+const MOCK_SAMPLE_EMAIL_ID = 'mock-sent-001'
+const publicAssetUrl = (filename: string) => `${import.meta.env.BASE_URL}${filename}`
+
+const sampleOriginalBody = `안녕하세요, 인사팀 김민지입니다.
+
+아래 신규 입사자에 대한 사내 계정 생성 및 급여 계좌 등록을 요청드립니다.
+
+- 성명: 박서연
+- 생년월일: 1999년 3월 12일
+- 주민등록번호: 990312-2345678
+- 휴대폰 번호: 010-4821-7395
+- 개인 이메일: seoyeon.park99@gmail.com
+- 사내 이메일: sy.park@company.co.kr
+- 주소: 서울특별시 마포구 월드컵북로 45길 17, 302호
+- 부서: 보안기술팀
+- 직급: 사원
+- 입사일: 2026년 6월 10일
+
+급여 계좌 정보는 아래와 같습니다.
+
+- 은행명: 국민은행
+- 계좌번호: 123456-01-789012
+- 예금주: 박서연
+
+추가로 법인카드 발급 신청도 함께 진행 부탁드립니다.
+
+- 카드 수령 주소: 서울특별시 강남구 테헤란로 152, 14층 총무팀
+- 비상 연락처: 010-9182-4567
+- 보호자 성명: 박정호
+- 보호자 관계: 부
+
+첨부파일에는 신분증 사본과 통장 사본이 포함되어 있으니 외부 공유되지 않도록 주의 부탁드립니다.
+
+감사합니다.
+김민지 드림
+인사팀 / 02-3456-7788
+minji.kim@company.co.kr`
+
+const sampleMaskedBody = `안녕하세요, 인사팀 김민지입니다.
+
+아래 신규 입사자에 대한 사내 계정 생성 및 급여 계좌 등록을 요청드립니다.
+
+- 성명: 박*연
+- 생년월일: 1999년 **월 **일
+- 주민등록번호: 990312-*******
+- 휴대폰 번호: 010-****-7395
+- 개인 이메일: se***********@gmail.com
+- 사내 이메일: sy*****@company.co.kr
+- 주소: 서울특별시 마포구 ****
+- 부서: 보안기술팀
+- 직급: 사원
+- 입사일: 2026년 6월 10일
+
+급여 계좌 정보는 아래와 같습니다.
+
+- 은행명: 국민은행
+- 계좌번호: 123456-**-******
+- 예금주: 박*연
+
+추가로 법인카드 발급 신청도 함께 진행 부탁드립니다.
+
+- 카드 수령 주소: 서울특별시 강남구 ****
+- 비상 연락처: 010-****-4567
+- 보호자 성명: 박*호
+- 보호자 관계: 부
+
+첨부파일에는 신분증 사본과 통장 사본이 포함되어 있으니 외부 공유되지 않도록 주의 부탁드립니다.
+
+감사합니다.
+김민지 드림
+인사팀 / 02-3456-7788
+minji.kim@company.co.kr`
 
 export const mockUnstructuredAttachment = {
   filename: '예제비정형.png',
-  size: 180000,
+  size: 200822,
   content_type: 'image/png',
-  public_url: '/예제비정형.png',
+  public_url: publicAssetUrl('예제비정형.png'),
 }
 
 export const mockMaskedUnstructuredAttachment = {
   filename: 'masked_예제비정형.png',
-  size: 200822,
+  size: 1206990,
   content_type: 'image/png',
-  public_url: '/masked_예제비정형.png',
+  public_url: publicAssetUrl('masked_예제비정형.png'),
 }
 
 export const isMockMode = () => localStorage.getItem('maskit_mock_mode') === 'true'
 
-export const mockReceivedEmails = [
-  {
-    _id: 'mock-received-001',
-    from_email: 'privacy-admin@maskit.local',
-    to_email: 'free.demo@example.com',
-    subject: '[샘플] 관리자 검토 완료: 계약서 개인정보 마스킹',
-    body: '<p>계약서 검토가 완료되었습니다. 주민등록번호와 연락처는 마스킹 처리되었고, 회사명은 업무상 필요 정보로 유지되었습니다.</p>',
-    original_body: '<p>계약서 검토가 완료되었습니다. 주민등록번호와 연락처는 마스킹 처리되었고, 회사명은 업무상 필요 정보로 유지되었습니다.</p>',
-    masked_body: '<p>계약서 검토가 완료되었습니다. 주민등록번호와 연락처는 마스킹 처리되었고, 회사명은 업무상 필요 정보로 유지되었습니다.</p>',
-    created_at: new Date(now - 1000 * 60 * 22).toISOString(),
-    read: false,
-    status: 'approved' as const,
-    attachments: [{ filename: 'masked-contract.pdf', size: 420000, content_type: 'application/pdf' }],
-  },
-  {
-    _id: 'mock-received-002',
-    from_email: 'audit@maskit.local',
-    to_email: 'free.demo@example.com',
-    subject: '[샘플] 개인정보 보호 이력 리포트',
-    body: '<p>오늘 처리된 메일 3건 중 고위험 개인정보 5개가 보호 처리되었습니다. 상세 판단 근거는 프라이버시 보호 이력에서 확인할 수 있습니다.</p>',
-    original_body: '<p>오늘 처리된 메일 3건 중 고위험 개인정보 5개가 보호 처리되었습니다. 상세 판단 근거는 프라이버시 보호 이력에서 확인할 수 있습니다.</p>',
-    created_at: new Date(now - 1000 * 60 * 60 * 3).toISOString(),
-    read: true,
-    status: 'approved' as const,
-    attachments: [],
-  },
-  {
-    _id: 'mock-received-003',
-    from_email: 'admin@maskit.local',
-    to_email: 'free.demo@example.com',
-    subject: '[샘플] OCR 첨부파일 분석 결과 공유',
-    body: '<p>첨부 이미지에서 계좌번호와 휴대폰 번호가 탐지되어 자동 마스킹 후보로 등록되었습니다.</p>',
-    original_body: '<p>첨부 이미지에서 계좌번호와 휴대폰 번호가 탐지되어 자동 마스킹 후보로 등록되었습니다.</p>',
-    created_at: new Date(now - 1000 * 60 * 60 * 8).toISOString(),
-    read: false,
-    status: 'pending' as const,
-    attachments: [mockUnstructuredAttachment],
-  },
-]
+export const mockReceivedEmails: any[] = []
 
 export const mockSentEmails = [
   {
-    _id: 'mock-sent-001',
-    email_id: 'mock-sent-001',
+    _id: MOCK_SAMPLE_EMAIL_ID,
+    email_id: MOCK_SAMPLE_EMAIL_ID,
     from_email: 'free.demo@example.com',
-    to_email: 'partner@example.com',
-    to_emails: ['partner@example.com'],
-    subject: '[샘플] 개인정보 포함 계약서 발송 전 점검',
-    original_body: '<p>안녕하세요. 홍길동님의 계약서 초안을 공유드립니다. 연락처 010-1234-5678, 주민등록번호 900101-1234567은 검토 후 보호 처리 예정입니다.</p>',
-    body: '<p>안녕하세요. 홍길동님의 계약서 초안을 공유드립니다. 연락처 010-1234-5678, 주민등록번호 900101-1234567은 검토 후 보호 처리 예정입니다.</p>',
+    to_email: 'it-admin@company.co.kr',
+    to_emails: ['it-admin@company.co.kr', 'payroll@company.co.kr'],
+    subject: '신규 입사자 계정 생성 및 급여 등록 요청',
+    original_body: sampleOriginalBody,
+    body: sampleOriginalBody,
     created_at: new Date(now - 1000 * 60 * 50).toISOString(),
     attachments: [mockUnstructuredAttachment],
     attachments_summary: [mockUnstructuredAttachment],
-    status: 'sent',
-  },
-  {
-    _id: 'mock-sent-002',
-    email_id: 'mock-sent-002',
-    from_email: 'free.demo@example.com',
-    to_email: 'audit@example.com',
-    to_emails: ['audit@example.com'],
-    subject: '[샘플] 주민등록번호 자동 마스킹 적용',
-    original_body: '<p>내부 감사용으로 고객 식별 정보가 포함된 표를 전달합니다. 김민수, 850505-2345678, minsu@example.com 항목은 마스킹 대상입니다.</p>',
-    body: '<p>내부 감사용으로 고객 식별 정보가 포함된 표를 전달합니다. 김민수, 850505-2345678, minsu@example.com 항목은 마스킹 대상입니다.</p>',
-    created_at: new Date(now - 1000 * 60 * 60 * 5).toISOString(),
-    attachments: [{ filename: 'masked-report.pdf', size: 310000, content_type: 'application/pdf' }],
-    attachments_summary: [{ filename: 'masked-report.pdf', size: 310000, content_type: 'application/pdf' }],
-    status: 'sent',
-  },
-  {
-    _id: 'mock-sent-003',
-    email_id: 'mock-sent-003',
-    from_email: 'free.demo@example.com',
-    to_email: 'hr@example.com',
-    to_emails: ['hr@example.com'],
-    subject: '[샘플] 채용 서류 외부 공유 전 검사',
-    original_body: '<p>지원자 이름과 포트폴리오 링크는 채용 검토 목적상 유지하고, 개인 휴대폰 번호는 마스킹했습니다.</p>',
-    body: '<p>지원자 이름과 포트폴리오 링크는 채용 검토 목적상 유지하고, 개인 휴대폰 번호는 마스킹했습니다.</p>',
-    created_at: new Date(now - 1000 * 60 * 60 * 26).toISOString(),
-    attachments: [],
-    attachments_summary: [],
     status: 'sent',
   },
 ]
 
 export const mockMaskedEmails = {
   'mock-sent-001': {
-    email_id: 'mock-sent-001',
+    email_id: MOCK_SAMPLE_EMAIL_ID,
     from_email: 'free.demo@example.com',
-    to_emails: ['partner@example.com'],
-    subject: '[샘플] 개인정보 포함 계약서 발송 전 점검',
-    masked_body: '<p>안녕하세요. 홍*동님의 계약서 초안을 공유드립니다. 연락처 010-****-5678, 주민등록번호 900101-*******은 검토 후 보호 처리 예정입니다.</p>',
+    to_emails: ['it-admin@company.co.kr', 'payroll@company.co.kr'],
+    subject: '신규 입사자 계정 생성 및 급여 등록 요청',
+    masked_body: sampleMaskedBody,
     masked_attachments: [mockMaskedUnstructuredAttachment],
-    pii_masked_count: 3,
+    pii_masked_count: 11,
     created_at: new Date(now - 1000 * 60 * 48).toISOString(),
     masking_decisions: {
-      pii_0: {
-        pii_id: 'pii_0',
+      sender_name: {
+        pii_id: 'sender_name',
         type: 'PERSON',
-        value: '홍길동',
+        value: '김민지',
+        should_mask: false,
+        masking_method: 'none',
+        masked_value: '김민지',
+        reason: '사내 업무 요청의 송신자 서명 이름은 수신자가 요청 주체를 확인하고 회신하는 데 필요한 업무 정보입니다. AOAI는 고위험 식별자가 아니며 sender_signature 역할이므로 원문 유지가 적절하다고 판단했습니다.',
+        reasoning: '사내 업무 요청의 송신자 서명 이름은 수신자가 요청 주체를 확인하고 회신하는 데 필요한 업무 정보입니다. AOAI는 고위험 식별자가 아니며 sender_signature 역할이므로 원문 유지가 적절하다고 판단했습니다.',
+        cited_guidelines: ['업무 수행 목적 내 최소 필요 정보'],
+        guideline_matched: true,
+        confidence: 0.88,
+        risk_level: 'low' as const,
+      },
+      employee_name: {
+        pii_id: 'employee_name',
+        type: 'PERSON',
+        value: '박서연',
         should_mask: true,
         masking_method: 'partial',
-        masked_value: '홍*동',
-        reason: '외부 협력사 공유 문맥에서 개인 이름은 식별 가능성이 있어 부분 마스킹합니다.',
-        reasoning: '무료 체험 mock 판단입니다. 실제 모드에서는 AOAI web search와 가이드라인 검색 결과를 함께 사용합니다.',
+        masked_value: '박*연',
+        reason: '신규 입사자 이름은 주민등록번호, 급여 계좌, 연락처, 주소와 함께 제시되어 개인 식별성이 높습니다. AOAI는 사내 처리에 필요한 최소 식별 정보만 남기고 이름은 부분 마스킹하는 것이 적절하다고 판단했습니다.',
+        reasoning: '신규 입사자 이름은 주민등록번호, 급여 계좌, 연락처, 주소와 함께 제시되어 개인 식별성이 높습니다. AOAI는 사내 처리에 필요한 최소 식별 정보만 남기고 이름은 부분 마스킹하는 것이 적절하다고 판단했습니다.',
         cited_guidelines: ['개인정보 최소 공개 원칙'],
         guideline_matched: true,
-        confidence: 0.91,
+        confidence: 0.94,
         risk_level: 'medium' as const,
       },
-      pii_1: {
-        pii_id: 'pii_1',
-        type: 'phone',
-        value: '010-1234-5678',
+      birth_date: {
+        pii_id: 'birth_date',
+        type: 'DATE_OF_BIRTH',
+        value: '1999년 3월 12일',
         should_mask: true,
         masking_method: 'partial',
-        masked_value: '010-****-5678',
-        reason: '휴대폰 번호는 직접 연락 가능한 식별자입니다.',
-        reasoning: '외부 전송에서는 업무에 꼭 필요한 경우가 아니면 보호 처리가 권장됩니다.',
+        masked_value: '1999년 **월 **일',
+        reason: '생년월일은 주민등록번호와 함께 제공되어 동일인을 특정할 수 있는 식별 정보입니다. AOAI는 계정 생성과 급여 등록 목적상 전체 월일 노출이 필요하지 않다고 보고 월일을 마스킹 대상으로 판단했습니다.',
+        reasoning: '생년월일은 주민등록번호와 함께 제공되어 동일인을 특정할 수 있는 식별 정보입니다. AOAI는 계정 생성과 급여 등록 목적상 전체 월일 노출이 필요하지 않다고 보고 월일을 마스킹 대상으로 판단했습니다.',
+        cited_guidelines: ['개인정보 최소 공개 원칙'],
+        guideline_matched: true,
+        confidence: 0.9,
+        risk_level: 'medium' as const,
+      },
+      resident_registration_number: {
+        pii_id: 'resident_registration_number',
+        type: 'RRN',
+        value: '990312-2345678',
+        should_mask: true,
+        masking_method: 'partial',
+        masked_value: '990312-*******',
+        reason: '주민등록번호는 고유식별정보이며 급여 등록 메일에 포함되더라도 노출 위험이 큽니다. AOAI는 업무 처리 여부와 관계없이 뒷자리를 보호해야 하는 고위험 정보로 판단했습니다.',
+        reasoning: '주민등록번호는 고유식별정보이며 급여 등록 메일에 포함되더라도 노출 위험이 큽니다. AOAI는 업무 처리 여부와 관계없이 뒷자리를 보호해야 하는 고위험 정보로 판단했습니다.',
+        cited_guidelines: ['고유식별정보 처리 제한'],
+        guideline_matched: true,
+        confidence: 0.99,
+        risk_level: 'high' as const,
+      },
+      mobile_phone: {
+        pii_id: 'mobile_phone',
+        type: 'PHONE_NUMBER',
+        value: '010-4821-7395',
+        should_mask: true,
+        masking_method: 'partial',
+        masked_value: '010-****-7395',
+        reason: '신규 입사자의 개인 휴대폰 번호는 직접 연락 가능한 개인 연락처입니다. AOAI는 사내 업무 요청 문맥에서도 전체 번호 노출은 과도하다고 보고 중간 번호 마스킹이 필요하다고 판단했습니다.',
+        reasoning: '신규 입사자의 개인 휴대폰 번호는 직접 연락 가능한 개인 연락처입니다. AOAI는 사내 업무 요청 문맥에서도 전체 번호 노출은 과도하다고 보고 중간 번호 마스킹이 필요하다고 판단했습니다.',
+        cited_guidelines: ['연락처 보호 기준'],
+        guideline_matched: true,
+        confidence: 0.97,
+        risk_level: 'high' as const,
+      },
+      personal_email: {
+        pii_id: 'personal_email',
+        type: 'EMAIL_ADDRESS',
+        value: 'seoyeon.park99@gmail.com',
+        should_mask: true,
+        masking_method: 'partial',
+        masked_value: 'se***********@gmail.com',
+        reason: '개인 이메일은 업무 계정과 별개인 사적 연락처입니다. AOAI는 계정 생성에 참고될 수 있더라도 전체 주소 노출은 불필요하므로 계정명 일부를 보호하는 것이 적절하다고 판단했습니다.',
+        reasoning: '개인 이메일은 업무 계정과 별개인 사적 연락처입니다. AOAI는 계정 생성에 참고될 수 있더라도 전체 주소 노출은 불필요하므로 계정명 일부를 보호하는 것이 적절하다고 판단했습니다.',
         cited_guidelines: ['연락처 보호 기준'],
         guideline_matched: true,
         confidence: 0.96,
         risk_level: 'high' as const,
       },
-      pii_2: {
-        pii_id: 'pii_2',
-        type: 'jumin',
-        value: '900101-1234567',
+      corporate_email: {
+        pii_id: 'corporate_email',
+        type: 'EMAIL_ADDRESS',
+        value: 'sy.park@company.co.kr',
         should_mask: true,
-        masking_method: 'full',
-        masked_value: '900101-*******',
-        reason: '주민등록번호는 고위험 고유식별정보입니다.',
-        reasoning: '목적과 무관한 전체 번호 공개는 차단합니다.',
-        cited_guidelines: ['고유식별정보 처리 제한'],
+        masking_method: 'partial',
+        masked_value: 'sy*****@company.co.kr',
+        reason: '사내 이메일은 신규 입사자 개인에게 배정되는 계정 식별자입니다. AOAI는 도메인은 업무상 의미가 있으나 계정명 전체는 개인 식별 가능성이 있어 일부 마스킹이 적절하다고 판단했습니다.',
+        reasoning: '사내 이메일은 신규 입사자 개인에게 배정되는 계정 식별자입니다. AOAI는 도메인은 업무상 의미가 있으나 계정명 전체는 개인 식별 가능성이 있어 일부 마스킹이 적절하다고 판단했습니다.',
+        cited_guidelines: ['개인정보 최소 공개 원칙'],
         guideline_matched: true,
-        confidence: 0.99,
+        confidence: 0.89,
+        risk_level: 'medium' as const,
+      },
+      home_address: {
+        pii_id: 'home_address',
+        type: 'ADDRESS',
+        value: '서울특별시 마포구 월드컵북로 45길 17, 302호',
+        should_mask: true,
+        masking_method: 'partial',
+        masked_value: '서울특별시 마포구 ****',
+        reason: '자택 주소는 거주지를 특정할 수 있는 위치 정보입니다. AOAI는 입사와 급여 처리 문맥에서도 상세 주소 전체 노출은 필요 최소 범위를 넘는다고 보고 구 단위 이하 상세 주소를 마스킹해야 한다고 판단했습니다.',
+        reasoning: '자택 주소는 거주지를 특정할 수 있는 위치 정보입니다. AOAI는 입사와 급여 처리 문맥에서도 상세 주소 전체 노출은 필요 최소 범위를 넘는다고 보고 구 단위 이하 상세 주소를 마스킹해야 한다고 판단했습니다.',
+        cited_guidelines: ['주소 정보 보호 기준'],
+        guideline_matched: true,
+        confidence: 0.97,
         risk_level: 'high' as const,
+      },
+      bank_account: {
+        pii_id: 'bank_account',
+        type: 'BANK_ACCOUNT',
+        value: '123456-01-789012',
+        should_mask: true,
+        masking_method: 'partial',
+        masked_value: '123456-**-******',
+        reason: '급여 계좌번호는 금융정보로 오남용 위험이 높습니다. AOAI는 급여 등록 업무상 은행명과 예금주 확인은 가능하더라도 계좌 상세번호는 부분 마스킹해야 한다고 판단했습니다.',
+        reasoning: '급여 계좌번호는 금융정보로 오남용 위험이 높습니다. AOAI는 급여 등록 업무상 은행명과 예금주 확인은 가능하더라도 계좌 상세번호는 부분 마스킹해야 한다고 판단했습니다.',
+        cited_guidelines: ['금융정보 보호 기준'],
+        guideline_matched: true,
+        confidence: 0.98,
+        risk_level: 'high' as const,
+      },
+      card_delivery_address: {
+        pii_id: 'card_delivery_address',
+        type: 'ADDRESS',
+        value: '서울특별시 강남구 테헤란로 152, 14층 총무팀',
+        should_mask: true,
+        masking_method: 'partial',
+        masked_value: '서울특별시 강남구 ****',
+        reason: '카드 수령 주소는 법인카드 전달 장소와 조직 내부 위치를 특정합니다. AOAI는 업무 처리에 지역 단위 정보만 남기고 상세 층과 팀 위치는 보호하는 것이 적절하다고 판단했습니다.',
+        reasoning: '카드 수령 주소는 법인카드 전달 장소와 조직 내부 위치를 특정합니다. AOAI는 업무 처리에 지역 단위 정보만 남기고 상세 층과 팀 위치는 보호하는 것이 적절하다고 판단했습니다.',
+        cited_guidelines: ['주소 정보 보호 기준'],
+        guideline_matched: true,
+        confidence: 0.92,
+        risk_level: 'medium' as const,
+      },
+      emergency_phone: {
+        pii_id: 'emergency_phone',
+        type: 'PHONE_NUMBER',
+        value: '010-9182-4567',
+        should_mask: true,
+        masking_method: 'partial',
+        masked_value: '010-****-4567',
+        reason: '비상 연락처는 제3자의 직접 연락 가능한 개인정보입니다. AOAI는 신규 입사자 본인의 업무 처리 정보가 아니므로 중간 번호를 마스킹해 제3자 노출을 줄여야 한다고 판단했습니다.',
+        reasoning: '비상 연락처는 제3자의 직접 연락 가능한 개인정보입니다. AOAI는 신규 입사자 본인의 업무 처리 정보가 아니므로 중간 번호를 마스킹해 제3자 노출을 줄여야 한다고 판단했습니다.',
+        cited_guidelines: ['연락처 보호 기준'],
+        guideline_matched: true,
+        confidence: 0.97,
+        risk_level: 'high' as const,
+      },
+      guardian_name: {
+        pii_id: 'guardian_name',
+        type: 'PERSON',
+        value: '박정호',
+        should_mask: true,
+        masking_method: 'partial',
+        masked_value: '박*호',
+        reason: '보호자 성명은 입사자 외 제3자의 식별 정보입니다. AOAI는 보호자 관계와 결합될 경우 제3자를 특정할 수 있어 부분 마스킹이 필요하다고 판단했습니다.',
+        reasoning: '보호자 성명은 입사자 외 제3자의 식별 정보입니다. AOAI는 보호자 관계와 결합될 경우 제3자를 특정할 수 있어 부분 마스킹이 필요하다고 판단했습니다.',
+        cited_guidelines: ['제3자 개인정보 보호 기준'],
+        guideline_matched: true,
+        confidence: 0.93,
+        risk_level: 'medium' as const,
+      },
+      office_phone: {
+        pii_id: 'office_phone',
+        type: 'PHONE_NUMBER',
+        value: '02-3456-7788',
+        should_mask: false,
+        masking_method: 'none',
+        masked_value: '02-3456-7788',
+        reason: '사내 업무 요청의 송신자 서명 전화번호는 수신자가 요청 내용을 확인하거나 회신할 때 필요한 업무 연락처입니다. AOAI는 고위험 식별자가 아니며 sender_signature 역할이므로 원문 유지가 적절하다고 판단했습니다.',
+        reasoning: '사내 업무 요청의 송신자 서명 전화번호는 수신자가 요청 내용을 확인하거나 회신할 때 필요한 업무 연락처입니다. AOAI는 고위험 식별자가 아니며 sender_signature 역할이므로 원문 유지가 적절하다고 판단했습니다.',
+        cited_guidelines: ['업무 수행 목적 내 최소 필요 정보'],
+        guideline_matched: true,
+        confidence: 0.88,
+        risk_level: 'low' as const,
+      },
+      sender_email: {
+        pii_id: 'sender_email',
+        type: 'EMAIL_ADDRESS',
+        value: 'minji.kim@company.co.kr',
+        should_mask: false,
+        masking_method: 'none',
+        masked_value: 'minji.kim@company.co.kr',
+        reason: '사내 업무 요청의 송신자 서명 업무 이메일은 수신자의 신원 확인과 회신에 필요한 업무 정보입니다. AOAI는 개인 연락처가 아닌 업무 연락처이며 sender_signature 역할이므로 원문 유지가 적절하다고 판단했습니다.',
+        reasoning: '사내 업무 요청의 송신자 서명 업무 이메일은 수신자의 신원 확인과 회신에 필요한 업무 정보입니다. AOAI는 개인 연락처가 아닌 업무 연락처이며 sender_signature 역할이므로 원문 유지가 적절하다고 판단했습니다.',
+        cited_guidelines: ['업무 수행 목적 내 최소 필요 정보'],
+        guideline_matched: true,
+        confidence: 0.88,
+        risk_level: 'low' as const,
       },
     },
   },
@@ -169,36 +329,17 @@ export const mockAuditLogs = [
     severity: 'info',
     user_email: 'free.demo@example.com',
     user_role: 'user',
-    action: '계약서 메일 본문에서 고위험 개인정보 3개 마스킹 권장',
+    action: '신규 입사자 계정 생성 및 급여 등록 요청 메일에서 개인정보 14개 분석, 11개 마스킹 권장',
     resource_type: 'email',
-    resource_id: 'mock-sent-001',
-    details: { pii_count: 3, mode: 'mock', protected_types: ['이름', '전화번호', '주민등록번호'] },
-    success: true,
-  },
-  {
-    _id: 'mock-log-002',
-    timestamp: new Date(now - 1000 * 60 * 60 * 3).toISOString(),
-    event_type: 'email_send',
-    severity: 'info',
-    user_email: 'free.demo@example.com',
-    user_role: 'user',
-    action: '마스킹 적용 후 샘플 메일 전송 처리',
-    resource_type: 'email',
-    resource_id: 'mock-sent-002',
-    details: { mode: 'mock', smtp_used: false },
-    success: true,
-  },
-  {
-    _id: 'mock-log-003',
-    timestamp: new Date(now - 1000 * 60 * 60 * 7).toISOString(),
-    event_type: 'masking_apply',
-    severity: 'info',
-    user_email: 'admin@maskit.local',
-    user_role: 'root_admin',
-    action: '관리자 검토 메일의 첨부 OCR 결과에 마스킹 적용',
-    resource_type: 'attachment',
-    resource_id: 'receipt-scan.png',
-    details: { mode: 'mock', ocr: true, masked_count: 2 },
+    resource_id: MOCK_SAMPLE_EMAIL_ID,
+    details: {
+      pii_count: 14,
+      masked_count: 11,
+      mode: 'mock',
+      protected_types: ['이름', '생년월일', '주민등록번호', '연락처', '이메일', '주소', '계좌번호'],
+      preserved_sender_signature: ['김민지', '02-3456-7788', 'minji.kim@company.co.kr'],
+      masked_attachment: 'masked_예제비정형.png',
+    },
     success: true,
   },
 ]
@@ -267,15 +408,13 @@ function normalizeMaskingDecisions(decisions: Record<string, any> = {}) {
 }
 
 export function getMockSentEmails() {
-  const stored = readStoredList<any>(MOCK_SENT_STORAGE_KEY)
-  return [...stored, ...mockSentEmails].sort(
+  return [...mockSentEmails].sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
   )
 }
 
 export function getMockAuditLogs() {
-  const stored = readStoredList<any>(MOCK_AUDIT_STORAGE_KEY)
-  return [...stored, ...mockAuditLogs].sort(
+  return [...mockAuditLogs].sort(
     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
   )
 }
@@ -373,6 +512,5 @@ export function findMockSentEmail(emailId: string) {
 }
 
 export function findMockMaskedEmail(emailId: string) {
-  const stored = readStoredMap<any>(MOCK_MASKED_STORAGE_KEY)
-  return stored[emailId] || mockMaskedEmails[emailId as keyof typeof mockMaskedEmails]
+  return mockMaskedEmails[emailId as keyof typeof mockMaskedEmails]
 }

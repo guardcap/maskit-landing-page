@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Mail, Paperclip, ArrowLeft, Search, Filter, Inbox, Send } from 'lucide-react'
-import { getMockSentEmails, isMockMode, mockReceivedEmails } from '@/mock/demoData'
+import { getMockSentEmails, isMockMode } from '@/mock/demoData'
 
 interface Email {
   _id: string
@@ -40,7 +40,6 @@ interface UserDashboardPageProps {
 
 const mockEmails: Email[] = [
   ...getMockSentEmails().map((email) => ({ ...email, type: 'sent' as const, status: 'sent' as const })),
-  ...mockReceivedEmails.map((email) => ({ ...email, type: 'received' as const, status: 'received' as const })),
 ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
 export function UserDashboardPage({ onNavigate }: UserDashboardPageProps) {
@@ -59,10 +58,7 @@ export function UserDashboardPage({ onNavigate }: UserDashboardPageProps) {
     try {
       setLoading(true)
       if (mockMode) {
-        setEmails([
-          ...getMockSentEmails().map((email) => ({ ...email, type: 'sent' as const, status: 'sent' as const })),
-          ...mockReceivedEmails.map((email) => ({ ...email, type: 'received' as const, status: 'received' as const })),
-        ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()))
+        setEmails(mockEmails)
         setError(null)
         return
       }

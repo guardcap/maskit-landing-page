@@ -92,7 +92,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         <CardHeader className="space-y-2 text-center">
           <div className="flex justify-center mb-0">
             <img 
-              src="/logo.png" 
+              src={`${import.meta.env.BASE_URL}logo.png`}
               alt="MASKIT Logo" 
               className="h-20 w-20 object-contain"
             />

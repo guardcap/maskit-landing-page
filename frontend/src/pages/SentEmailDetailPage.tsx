@@ -243,8 +243,8 @@ function MaskedTextWithMetadata({ text, decisions, originalText }: {
             {text.substring(match.start, match.end)}
           </span>
         </HoverCardTrigger>
-        <HoverCardContent className="w-80 z-50 border-primary/20" side="top" align="start" sideOffset={5}>
-          <div className="space-y-2">
+        <HoverCardContent className="w-96 z-50 border-primary/20" side="top" align="start" sideOffset={5}>
+          <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-semibold flex items-center gap-1 text-slate-800">
                 {getRiskIcon(match.decision.risk_level)}
@@ -271,9 +271,18 @@ function MaskedTextWithMetadata({ text, decisions, originalText }: {
             </div>
             
             <div className="pt-2 border-t border-slate-100">
-              <p className="text-xs font-medium mb-1 text-slate-700">마스킹 이유:</p>
+              <p className="text-xs font-medium mb-1 text-slate-700">AOAI 마스킹 판단 이유:</p>
               <p className="text-xs text-slate-500 leading-relaxed">{match.decision.reason}</p>
             </div>
+
+            {match.decision.cited_guidelines?.length > 0 && (
+              <div className="pt-2 border-t border-slate-100">
+                <p className="text-xs font-medium mb-1 text-slate-700">근거:</p>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  {match.decision.cited_guidelines.join(', ')}
+                </p>
+              </div>
+            )}
           </div>
         </HoverCardContent>
       </HoverCard>
@@ -317,8 +326,10 @@ export const SentEmailDetailPage: React.FC<SentEmailDetailPageProps> = ({
       if (isMockMode()) {
         const mockOriginal = findMockSentEmail(emailId)
         if (!mockOriginal) throw new Error('샘플 메일을 찾을 수 없습니다.')
+        const mockMasked = findMockMaskedEmail(emailId) || null
         setOriginalEmail(mockOriginal)
-        setMaskedEmail(findMockMaskedEmail(emailId) || null)
+        setMaskedEmail(mockMasked)
+        hasMaskedData = !!mockMasked
         setLoading(false)
         return
       }
@@ -408,9 +419,7 @@ export const SentEmailDetailPage: React.FC<SentEmailDetailPageProps> = ({
       toast.error(error.message || '이메일을 불러오는데 실패했습니다.')
     } finally {
       setLoading(false)
-      if (!hasMaskedData) {
-        setActiveView('original')
-      }
+      setActiveView(hasMaskedData ? 'compare' : 'original')
     }
   }
 
